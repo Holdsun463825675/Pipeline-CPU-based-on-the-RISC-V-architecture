@@ -1,0 +1,329 @@
+init:
+addi x2, x0, 1
+addi x3, x0, 12
+sll x2, x2, x3	  #x2=sp=4096
+addi x3, x0, 0xe
+slli x3, x3, 28	  #x3=0xe0000000  (SSeg7)
+addi x4, x0, 0xf
+slli x4, x4, 28	  #x4=0xf0000000  (LED、Switch)
+add x5, x0, x0	  #x5=begin address
+lb x6, 0(x5)	  #x6=n
+addi x10, x5, 4	  #x10=&a[0]
+add x11, x0, x0	  #x11=0     (left)
+addi x12, x6, -1	  #x12=n-1  (right)
+add x17, x0, x0    #x17=flag
+
+addi x2, x2, -8
+sw x5, 0(x2)
+sw x6, 4(x2)	#store x5, x6
+jal x1, quicksort		#quicksort(a,0,n-1)
+lw x5, 0(x2)
+lw x6, 4(x2)	#restore x5, x6
+addi x2, x2, 8
+
+
+main:
+addi x2, x2, -12
+sw x5, 0(x2)
+sw x6, 4(x2)	
+sw x7, 8(x2)	#store x5, x6, x7
+
+lw x5, 0(x4)
+andi x6, x5, 0x700
+addi x7, x0, 8
+srl x6, x6, x7		#x6=SW[10:8]
+
+sltiu x7, x6, 5
+beq x7, x0, display0		#default, call display0
+addi x8, x0, 4
+beq x6, x8, delete		#x6=3'b100, call delete
+addi x8, x8, -2
+beq x6, x8, insert		#x6=3'b010, call insert
+addi x8, x8, -1
+beq x6, x8, binarysearch	#x6=3'b001, call binarysearch
+beq x6, x0, displaya		#x6=3'b000, call displaya
+bne x6, x0, display0		#default, call display0
+
+mainback:
+lw x5, 0(x2)
+lw x6, 4(x2)
+lw x7, 8(x2)	#restore x5, x6, x7
+addi x2, x2, 12
+jal x0, main
+
+
+delay:
+addi x2, x2, -4
+sw x8, 0(x2)
+addi x8, x0, 1
+slli x8, x8, 22
+delayloop:
+beq x8, x0, delayexit
+addi x8, x8, -1
+jal x0, delayloop
+delayexit:
+lw x8, 0(x2)
+addi x2, x2, 4
+jalr x0, 0(x1)
+
+
+swap:
+lw x5, 0(x10)
+lw x6, 0(x11)
+sw x5, 0(x11)
+sw x6, 0(x10)
+jalr x0, 0(x1)
+
+
+display0:			#display nothing
+addi x5, x0, -1
+sw x5, 0(x3)
+sw x0, 0(x4)
+jal x0, mainback
+
+
+displaya:			#display array
+sw x0, 0(x4)
+add x17, x0, x0
+slt x7, x12, x17
+bne x7, x0, emptyarray
+bltu x12, x11, displayareset
+slli x5, x11, 2		#x5=left*4
+add x6, x10, x5
+lw x6, 0(x6)
+sw x6, 0(x3)
+jal x1, delay
+addi x11, x11, 1
+jal x0, enddisplaya
+displayareset:
+add x11, x0, x0
+jal x0, enddisplaya
+emptyarray:
+lui x5, 0xffc8c
+addi x6, x0, 0x8c
+or x5, x5, x6
+sw x5, 0(x3)		#display nop
+jal x1, delay
+addi x5, x0, -1
+sw x5, 0(x3)
+jal x1, delay
+enddisplaya:
+jal x0, mainback
+
+
+quicksort:
+bge x11, x12, endquicksort      # if (left>=right) return;
+slli x28, x11, 2				#x28=left*4  (i)
+slli x29, x12, 2				#x29=right*4  (j)
+add x30, x10, x28
+lw x30, 0(x30)				#x30=base=a[left]
+
+qsortloop1:
+	bge x28, x29, endqsortloop1     #while(i<j)
+
+	qsortloop2:
+		bge x28, x29, endqsortloop2
+		add x31, x10, x29
+		lw x31, 0(x31)
+		bge x30, x31, endqsortloop2	#while(i<j && a[j]>base)
+		addi x29, x29, -4			#j=j-1
+		jal x0, qsortloop2
+	endqsortloop2:
+
+	qsortloop3:
+		bge x28, x29, endqsortloop3
+		add x31, x10, x28
+		lw x31, 0(x31)
+		blt x30, x31, endqsortloop3	#while(i<j && a[i]<=base)
+		addi x28, x28, 4				#i=i+1
+		jal x0, qsortloop3
+	endqsortloop3:
+	
+	sltu x31, x28, x29
+	beq x31, x0, qsortloop1
+	addi x2, x2, -12
+	sw x1, 0(x2)
+	sw x10, 4(x2)
+	sw x11, 8(x2)		#store x1, x10, x11
+	add x11, x10, x29      #x11=&a[j]
+	add x10, x10, x28	#x10=&a[i]
+	jal x1, swap		#if (i<j) swap(a[i],a[j])
+	lw x1, 0(x2)
+	lw x10, 4(x2)
+	lw x11, 8(x2)		#restore x1, x10, x11
+	addi x2, x2, 12
+	jal x0, qsortloop1
+
+endqsortloop1:
+
+addi x2, x2, -12
+sw x1, 0(x2)
+sw x10, 4(x2)
+sw x11, 8(x2)		#store x1, x10, x11
+slli x5, x11, 2
+add x11, x10, x28      #x11=&a[i]
+add x10, x10, x5	#x10=&a[left]
+jal x1, swap		#swap(a[left],a[i])
+lw x1, 0(x2)
+lw x10, 4(x2)
+lw x11, 8(x2)		#restore x1, x10, x11
+addi x2, x2, 12
+
+srai x28, x28, 2		#i
+addi x2, x2, -16
+sw x1, 0(x2)
+sw x11, 4(x2)
+sw x12, 8(x2)
+sw x28, 12(x2)		#store x1, x11, x12, x28
+addi x12, x28, -1
+jal x1, quicksort		#quicksort(a,left,i-1)
+lw x12, 8(x2)
+lw x28, 12(x2)		#restore x12, x28
+addi x11, x28, 1
+jal x1, quicksort		#quicksort(a,i+1,right)
+lw x1, 0(x2)
+lw x11, 4(x2)
+lw x12, 8(x2)
+lw x28, 12(x2)		#restore x1, x11, x12, x28
+addi x2, x2, 16
+
+endquicksort:
+jalr x0, 0(x1)
+
+
+binarysearch:
+bne x17, x0, endbinarysearch
+xori x17, x17, -1
+lh x5, 0(x4)
+lui x6, 0x1f
+srli x6, x6, 1
+and x6, x5, x6
+srli x6, x6, 11		#x6=SW[15:11]
+
+add x5, x0, x0		#x5=0=left
+add x7, x0, x12		#x7=n-1=right
+
+binsearchloop:
+	blt x7, x5, notfound
+	add x28, x5, x7
+	addi x29, x0, 1
+	sra x28, x28, x29		#x28=mid=(left+right)>>1
+	slli x29, x28, 2
+	add x29, x10, x29
+	lw x29, 0(x29)			#x29=a[mid]
+	beq x6, x29, found		#if (a[mid] == k) return mid;
+	blt x6, x29, adjustright	#else if (a[mid] > k) right = mid - 1;
+	adjustleft:
+	addi x5, x28, 1			#else left = mid + 1;
+	jal x0, binsearchloop
+	adjustright:
+	addi x7, x28, -1
+	jal x0, binsearchloop
+endbinsearchloop:
+
+found:
+sw x28, 0(x3)			#display mid
+addi x5, x0, -1
+sw x5, 0(x4)			#light all LED
+jal x0, endbinarysearch
+
+notfound:
+lui x5, 0xffc8c
+ori x5, x5, 0x8c
+sw x5, 0(x3)		#display nop
+endbinarysearch:
+jal x0, mainback
+
+
+insert:
+bne x17, x0, endinsert
+
+xori x17, x17, -1
+lw x5, 0(x4)
+lui x6, 0x1f
+srli x6, x6, 1
+and x6, x5, x6
+srli x6, x6, 11		#x6=SW[15:11]
+
+addi x5, x0, 4
+sub x10, x10, x5
+lbu x5, 0(x10)
+addi x5, x5, 1
+sb x5, 0(x10)
+addi x10, x10, 4
+addi x12, x12, 1		#x12=n-1
+slli x7, x12, 2		#x7=n*4
+add x5, x10, x7
+sw x6, 0(x5)		#store x6 into array
+sw x6, 0(x3)		#display x6
+
+insertloop:
+	slti x30, x7, 1
+	bne x30, x0, endinsertloop
+	add x29, x10, x7	#x29=a[j]
+	lw x6, 0(x29)
+	addi x7, x7, -4
+	add x28, x10, x7	#x28=a[j-1]
+	lw x5, 0(x28)
+	bge x6, x5, endinsertloop
+	addi x2, x2, -12
+	sw x1, 0(x2)
+	sw x10, 4(x2)
+	sw x11, 8(x2)
+	add x10, x0, x28
+	add x11, x0, x29
+	jal x1, swap		#if (a[j]<a[j-1]) swap(a[j],a[j-1])
+	lw x1, 0(x2)
+	lw x10, 4(x2)
+	lw x11, 8(x2)
+	addi x2, x2, 12
+	jal x0, insertloop
+endinsertloop:
+	addi x5, x0, -1
+	sw x5, 0(x4)	#light all LED
+endinsert:
+jal x0, mainback
+
+
+delete:
+bne x17, x0, enddelete
+addi x5, x0, -1
+xor x17, x17, x5
+lw x5, 0(x4)
+lui x6, 0x1f
+srli x6, x6, 1
+and x6, x5, x6
+srli x6, x6, 11		#x6=SW[15:11]
+
+blt x12, x6, outofrange
+addi x5, x0, 4
+sub x10, x10, x5
+lhu x5, 0(x10)
+addi x5, x5, -1
+sh x5, 0(x10)
+addi x10, x10, 4
+addi x12, x12, -1	#x12=n-1
+slli x7, x12, 2		#x7=4*(n-1)
+slli x6, x6, 2
+add x5, x10, x6
+lw x5, 0(x5)
+sw x5, 0(x3)		#display deleted num
+addi x5, x0, -1
+sw x5, 0(x4)		#light all LED
+
+deleteloop:
+	blt x7, x6, enddeleteloop
+	add x28, x10, x6
+	addi x6, x6, 4
+	add x5, x10, x6
+	lw x5, 0(x5)
+	sw x5, 0(x28)		#a[j]=a[j+1]
+	jal x0, deleteloop
+outofrange:
+lui x5, 0xffc8c
+ori x5, x5, 0x8c
+sw x5, 0(x3)		#display nop
+enddeleteloop:
+enddelete:
+jal x0, mainback
+
